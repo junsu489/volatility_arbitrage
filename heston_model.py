@@ -1,14 +1,14 @@
 """Heston model"""
 
+# pylint: disable=line-too-long,too-many-arguments,too-many-locals
+
 from dataclasses import dataclass, field
 from typing import Union
 
 import numpy as np
 import numpy.typing as npt
-import scipy.stats as stats
 
 NP_ARRAY = npt.NDArray[np.float64]
-F0 = 100
 
 
 @dataclass
@@ -101,7 +101,10 @@ def generate_cir_processs(
     milstein_adj = 0.25 * var_params.vol_of_var**2 * (normal_var**2 - 1) * time_delta
     for i in range(length):
         diffusion = (
-            var_params.vol_of_var * np.sqrt(var[i]) * normal_var * np.sqrt(time_delta)
+            var_params.vol_of_var
+            * np.sqrt(var[i])
+            * normal_var[i]
+            * np.sqrt(time_delta)
         )
         var[i + 1] = (
             np.maximum(var[i] + drift + diffusion + milstein_adj[i], 0)
@@ -140,7 +143,7 @@ def generate_heston_processes(
     avg_vol = 0.5 * (vol[:-1] + vol[1:])
 
     drift = -0.5 * avg_var * time_delta
-    corr_diffusion = rho * vol * normal_var_1 * np.sqrt(time_delta)
+    corr_diffusion = rho * vol[:1] * normal_var_1 * np.sqrt(time_delta)
     uncorr_diffusion = avg_vol * normal_var_2 * np.sqrt(time_delta)
     milstein_correction = (
         0.5 * rho * var_params.vol_of_var * (normal_var_2**2 - 1) * time_delta
@@ -170,11 +173,11 @@ def generate_inefficient_market(
     )
 
     correlated_normal = (
-        corr.cholesky[3][0] * normal_var[0]
-        + corr.cholesky[3][1] * normal_var[1]
-        + corr.cholesky[3][2] * normal_var[2]
+        corr.cholesky[2][0] * normal_var[0]
+        + corr.cholesky[2][1] * normal_var[1]
+        + corr.cholesky[2][2] * normal_var[2]
     )
-    imp_var = generate_cir_process(
-        var_params, correlated_normal, num_path, length, time_delta
+    imp_var = generate_cir_processs(
+        imp_var_params, correlated_normal, num_path, length, time_delta
     )
     return lr, real_var, imp_var

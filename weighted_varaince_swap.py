@@ -1,5 +1,7 @@
 """Weighted variance swaps"""
 
+# pylint: disable=line-too-long, too-many-arguments,too-many-locals
+
 from abc import ABC, abstractmethod
 
 import numpy as np
