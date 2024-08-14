@@ -1,16 +1,18 @@
 """Heston model"""
 
-from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from typing import Union
 
 import numpy as np
 import numpy.typing as npt
+import scipy.stats as stats
 
 NP_ARRAY = npt.NDArray[np.float64]
+F0 = 100
 
 
 @dataclass
-class HestonModel:
+class HestonParams:
     """Heston stochastic volatilty parameters"""
 
     kappa: float
@@ -19,7 +21,9 @@ class HestonModel:
 
     def __post_init__(self) -> None:
         assert self.mean_of_var > 0
-        # Check feller condition``
+        assert self.kappa > 0
+        assert self.vol_of_var > 0
+        # Check feller condition
         assert 2 * self.kappa * self.mean_of_var > self.vol_of_var**2
 
 
@@ -43,9 +47,9 @@ class Correlation:
         # Construct the correlation matrix
         corr_matrix = np.array(
             [
-                [1.0, self.rho_spot_imp, self.rho_spot_real],
-                [self.rho_spot_imp, 1.0, self.rho_real_imp],
-                [self.rho_spot_real, self.rho_real_imp, 1.0],
+                [1.0, self.rho_spot_real, self.rho_real_imp],
+                [self.rho_spot_real, 1.0, self.rho_spot_imp],
+                [self.rho_real_imp, self.rho_spot_imp, 1.0],
             ]
         )
 
@@ -56,249 +60,121 @@ class Correlation:
                 "The correlation matrix is not positive definite."
             ) from exc
 
-    def simulate_multivariate_normal(self, size: tuple[int, int]) -> NP_ARRAY:
-        """
-        Simulate multivariate normal path
-        """
-        normal = np.random.normal(size=(3,) + size)
-        return self.cholesky @ normal
 
-
-class WeightedVarianceSwap(ABC):
+def generate_initial_var(
+    var_params: HestonParams, size: Union[int, tuple[int, ...]]
+) -> NP_ARRAY:
     """
-    Base class for weighted variance swap. See Lee, R. (2010). Weighted variance swap. Encyclopedia of quantitative finance.
+    :param var_params: Heston parameters
+    :param size: size
+    :return: samples that follow the asymptotice distribution of CIR process
     """
+    alpha = 2 * var_params.kappa * var_params.mean_of_var / var_params.vol_of_var**2
+    beta = 2 * var_params.kappa / var_params.vol_of_var**2
+    return np.random.gamma(shape=alpha, scale=1 / beta, size=size)
 
-    def __init__(
-        self, imp_var_param: HestonModel, real_var_param: HestonModel, corr: Correlation
-    ) -> None:
-        self.imp_var_param = imp_var_param
-        self.real_var_param = real_var_param
-        self.corr = corr
 
-    @abstractmethod
-    def price(self, *, imp_var: NP_ARRAY, tau: NP_ARRAY) -> NP_ARRAY:
-        """
-        Return price of weighted variance swap
+def generate_cir_processs(
+    var_params: HestonParams,
+    normal_var: NP_ARRAY,
+    num_path: int,
+    length: int,
+    time_delta: float,
+) -> NP_ARRAY:
+    """
+    Kahl, C., & Jäckel, P. (2006). Fast strong approximation Monte Carlo schemes for stochastic volatility models. Quantitative Finance, 6(6), 513-536.
 
-        :param imp_var: instantaneous implied variance
-        :param tau: time to expiry in years
-        """
+    :param var_params: Heston paremters
+    :param normal_var: i.i.d. standard normal random
+    :param num_path: number of paths
+    :param length: length of a path
+    :param time_delta: time delta in years
+    :return: Simulate CIR process
+    """
+    initial_var = generate_initial_var(var_params=var_params, size=1)
 
-    @abstractmethod
-    def var_vega(self, tau: NP_ARRAY) -> NP_ARRAY:
-        """
-        Return variance vega
+    var = np.zeros(shape=(length + 1, num_path))
+    var[0] = initial_var
 
-        :param tau: time to expiry in years
-        """
-
-    def var_skew_stikiness_ratio(
-        self, *, real_var: NP_ARRAY, imp_var: NP_ARRAY
-    ) -> NP_ARRAY:
-        """
-        SSR with respect to implied instantaneous variance = d imp_var d log(F) / (d log(F))^2
-
-        :param real_var: instantaneous realized variance
-        :param imp_var: instantanoues implied variance
-        """
-        return (
-            self.corr.rho_spot_imp
-            * self.imp_var_param.vol_of_var
-            * np.sqrt(imp_var)
-            / np.sqrt(real_var)
+    drift = var_params.kappa * var_params.mean_of_var * time_delta
+    mean_reversion_adj = 1 / (1 + var_params.kappa * time_delta)
+    milstein_adj = 0.25 * var_params.vol_of_var**2 * (normal_var**2 - 1) * time_delta
+    for i in range(length):
+        diffusion = (
+            var_params.vol_of_var * np.sqrt(var[i]) * normal_var * np.sqrt(time_delta)
+        )
+        var[i + 1] = (
+            np.maximum(var[i] + drift + diffusion + milstein_adj[i], 0)
+            * mean_reversion_adj
         )
 
-    def min_var_delta(
-        self, *, real_var: NP_ARRAY, imp_var: NP_ARRAY, tau: NP_ARRAY
-    ) -> NP_ARRAY:
-        """
-        Return minimum variance delta
-
-        :param real_var: instantaneous realized variance
-        :param imp_var: instantanoues implied variance
-        :param tau: time to expiry in years
-        """
-        return self.var_vega(tau) * self.var_skew_stikiness_ratio(
-            real_var=real_var, imp_var=imp_var
-        )
-
-    @abstractmethod
-    def total_pnl(
-        self,
-        *,
-        f_0: NP_ARRAY,
-        f_t: NP_ARRAY,
-        real_var_0: NP_ARRAY,
-        imp_var_0: NP_ARRAY,
-        tau_0: NP_ARRAY,
-        imp_var_t: NP_ARRAY,
-        tau_t: NP_ARRAY,
-    ) -> NP_ARRAY:
-        """
-        Return Total P&L
-
-        :param f_0: forward price at time 0
-        :param f_t: forward price at time t
-        :param real_var_0: instantaneous realize variacnce at time 0
-        :param imp_var_0: instantaneous implied variance at time 0
-        :param tau_0: time to expiry in years at time 0
-        :param imp_var_t: instantaneous implied variance at time t
-        :param tau_t: time to expiry in years at time t
-        """
-
-    @abstractmethod
-    @staticmethod
-    def gamma_pnl(*, f_0: NP_ARRAY, f_t: NP_ARRAY) -> NP_ARRAY:
-        """
-        Return Gamma P&L
-
-        :param f_0: forward price at time 0
-        :param f_t: fowward price at time t
-        """
-
-    def theta_pnl(
-        self,
-        *,
-        imp_var_0: NP_ARRAY,
-        tau_0: NP_ARRAY,
-        exp_imp_var_t: NP_ARRAY,
-        tau_t: NP_ARRAY,
-    ) -> NP_ARRAY:
-        """
-        Return expected Theta P&L at time 0
-
-        :param imp_var_0: instantaneous implied variance at time 0
-        :param tau_0: time to expiry in years at time 0
-        :param exp_imp_var_t: E[imp_var_t|imp_var_0]
-        :param tau_t: time to expiry in years at time t
-        """
-        assert 0 <= tau_t <= tau_0
-        return self.theta_pnl_from_initial_price(
-            price_0=self.price(imp_var=imp_var_0, tau=tau_0),
-            exp_imp_var_t=exp_imp_var_t,
-            tau_t=tau_t,
-        )
-
-    def theta_pnl_from_initial_price(
-        self, *, price_0: NP_ARRAY, exp_imp_var_t: NP_ARRAY, tau_t: NP_ARRAY
-    ) -> NP_ARRAY:
-        """
-        Return expected Theta P&L at time 0
-
-        :param price_0: price at time 0
-        :param exp_imp_var_t: E[imp_var_t|imp_var_0]
-        :param tau_t: time to expiry in years at time t
-        """
-        assert 0 <= tau_t
-        return self.price(imp_var=exp_imp_var_t, tau=tau_t) - price_0
-
-    def var_vega_pnl(
-        self,
-        *,
-        imp_var_0: NP_ARRAY,
-        tau_0: NP_ARRAY,
-        imp_var_t: NP_ARRAY,
-        exp_imp_var_t: NP_ARRAY,
-        tau_t: NP_ARRAY,
-    ) -> NP_ARRAY:
-        """
-        Return variance Vega P&L
-
-        :param imp_var_0: instantaneous implied variance at time 0
-        :param tau_0: time to expiry in years at time 0
-        :param imp_var_t: instantaneous implied variance at time t
-        :param exp_imp_var_t: E[imp_var_t|imp_var_0]
-        :param tau_t: time to expiry in years at time t
-        """
-        return self.var_vega_from_initial_price(
-            price_0=self.price(imp_var=imp_var_0, tau=tau_0),
-            imp_var_t=imp_var_t,
-            exp_imp_var_t=exp_imp_var_t,
-            tau_t=tau_t,
-        )
-
-    def var_vega_from_initial_price(
-        self,
-        price_0: NP_ARRAY,
-        imp_var_t: NP_ARRAY,
-        exp_imp_var_t: NP_ARRAY,
-        tau_t: NP_ARRAY,
-    ) -> NP_ARRAY:
-        """
-        Return variance Vega P&L
-
-        :param price_0: price at time 0
-        :param imp_var_0: instantaneous implied variance at time 0
-        :param tau_0: time to expiry in years at time 0
-        :param imp_var_t: instantaneous implied variance at time t
-        :param exp_imp_var_t: E[imp_var_t|imp_var_0]
-        :param tau_t: time to expiry in years at time t
-        """
-        price_t = self.price(imp_var=imp_var_t, tau=tau_t)
-        return (
-            price_t
-            - price_0
-            - self.theta_pnl_from_initial_price(
-                price_0=price_0, exp_imp_var_t=exp_imp_var_t, tau_t=tau_t
-            )
-        )
-
-    def vega_hedge_pnl(
-        self,
-        *,
-        f_0: NP_ARRAY,
-        f_t: NP_ARRAY,
-        real_var_0: NP_ARRAY,
-        imp_var_0: NP_ARRAY,
-        tau_0: NP_ARRAY,
-    ) -> NP_ARRAY:
-        """
-        Return Vega hedge P&L
-
-        :param f_0: forward price at time 0
-        :param f_t: forward price at time t
-        :param real_var_0: instantaneous realized variance at time 0
-        :param imp_var_0: instantaneous implied variance at time 0
-        :param tau_0: time to expiry in years at time 0
-        """
-        return -self.min_var_delta(
-            real_var=real_var_0, imp_var=imp_var_0, tau=tau_0
-        ) * (f_t - f_0)
+    return var
 
 
-class VarianceSwap(WeightedVarianceSwap):
-    def price(self, *, imp_var: NP_ARRAY, tau: NP_ARRAY) -> NP_ARRAY:
-        return (
-            self.imp_var_param.mean_of_var * tau
-            + (imp_var - self.imp_var_param.mean_of_var)
-            * (1 - np.exp(-self.imp_var_param.kappa * tau))
-            / self.imp_var_param.kappa
-        )
+def generate_heston_processes(
+    var_params: HestonParams,
+    normal_var_1: NP_ARRAY,
+    normal_var_2: NP_ARRAY,
+    rho: float,
+    num_path: int,
+    length: int,
+    time_delta: float,
+) -> tuple[NP_ARRAY, NP_ARRAY]:
+    """
+    Kahl, C., & Jäckel, P. (2006). Fast strong approximation Monte Carlo schemes for stochastic volatility models. Quantitative Finance, 6(6), 513-536.
 
-    def var_vega(self, tau: NP_ARRAY) -> NP_ARRAY:
-        assert tau > 0
-        return (1 - np.exp(-self.imp_var_param.kappa * tau)) / self.imp_var_param.kappa
+    :param var_params: Heston paremters
+    :param normal_var: i.i.d. standard normal random vector
+    :param normal_var: i.i.d. standard normal random vector
+    :param rho: corr bewteen normal var 1 and normal var 2
+    :param num_path: number of paths
+    :param length: length of a path
+    :param time_delta: time delta in years
+    :return: log return and instantaneous variance
+    """
+    var = generate_cir_processs(var_params, normal_var_1, num_path, length, time_delta)
+    vol = np.sqrt(var)
+    lr = np.zeros((length + 1, num_path))
 
-    def total_pnl(
-        self,
-        *,
-        f_0: NP_ARRAY,
-        f_t: NP_ARRAY,
-        real_var_0: NP_ARRAY,
-        imp_var_0: NP_ARRAY,
-        tau_0: NP_ARRAY,
-        imp_var_t: NP_ARRAY,
-        tau_t: NP_ARRAY,
-    ) -> NP_ARRAY:
-        price_0 = self.price(imp_var=imp_var_0, tau=tau_0)
-        price_t = self.price(imp_var=imp_var_t, tau=tau_t)
-        gamma_pnl = self.gamma_pnl(f_0=f_0, f_t=f_t)
-        vega_hedge_pnl = self.vega_hedge_pnl(
-            f_0=f_0, f_t=f_t, real_var_0=real_var_0, imp_var_0=imp_var_0, tau_0=tau_0
-        )
-        return price_t - price_0 + gamma_pnl + vega_hedge_pnl
+    avg_var = 0.5 * (var[:-1] + var[1:])
+    avg_vol = 0.5 * (vol[:-1] + vol[1:])
 
-    @staticmethod
-    def gamma_pnl(*, f_0: NP_ARRAY, f_t: NP_ARRAY) -> NP_ARRAY:
-        return 2 * (f_t / f_0 - 1 - np.log(f_t / f_0))
+    drift = -0.5 * avg_var * time_delta
+    corr_diffusion = rho * vol * normal_var_1 * np.sqrt(time_delta)
+    uncorr_diffusion = avg_vol * normal_var_2 * np.sqrt(time_delta)
+    milstein_correction = (
+        0.5 * rho * var_params.vol_of_var * (normal_var_2**2 - 1) * time_delta
+    )
+    lr[1:] = drift + corr_diffusion + uncorr_diffusion + milstein_correction
+    return lr, var
+
+
+def generate_inefficient_market(
+    *,
+    real_var_params: HestonParams,
+    imp_var_params: HestonParams,
+    corr: Correlation,
+    num_path: int,
+    length: int,
+    time_delta: float,
+) -> tuple[NP_ARRAY, NP_ARRAY, NP_ARRAY]:
+    normal_var = np.random.normal(size=(3, length, num_path))
+    lr, real_var = generate_heston_processes(
+        var_params=real_var_params,
+        normal_var_1=normal_var[0],
+        normal_var_2=normal_var[1],
+        rho=corr.rho_spot_real,
+        num_path=num_path,
+        length=length,
+        time_delta=time_delta,
+    )
+
+    correlated_normal = (
+        corr.cholesky[3][0] * normal_var[0]
+        + corr.cholesky[3][1] * normal_var[1]
+        + corr.cholesky[3][2] * normal_var[2]
+    )
+    imp_var = generate_cir_process(
+        var_params, correlated_normal, num_path, length, time_delta
+    )
+    return lr, real_var, imp_var
