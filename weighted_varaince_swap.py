@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 import numpy.typing as npt
 
-from heston_model import Correlation, HestonParams
+from vol_arb_in_heston.heston_model import Correlation, HestonParams
 
 NP_ARRAY = npt.NDArray[np.float64]
 

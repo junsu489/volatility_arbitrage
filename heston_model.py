@@ -161,6 +161,15 @@ def generate_inefficient_market(
     length: int,
     time_delta: float,
 ) -> tuple[NP_ARRAY, NP_ARRAY, NP_ARRAY]:
+    """
+    :param real_var_params: realzied Heston paremters
+    :param imp_var_params: implied Heston paremters
+    :param corr: correlation matrix
+    :param num_path: number of paths
+    :param length: length of a path
+    :param time_delta: time delta in years
+    :return: log return, realized instantaneous variance, implied instantaneous variance
+    """
     normal_var = np.random.normal(size=(3, length, num_path))
     lr, real_var = generate_heston_processes(
         var_params=real_var_params,
