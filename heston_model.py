@@ -3,7 +3,7 @@
 # pylint: disable=line-too-long,too-many-arguments,too-many-locals
 
 from dataclasses import dataclass, field
-from typing import Union
+from typing import Tuple, Union
 
 import numpy as np
 import numpy.typing as npt
@@ -62,7 +62,7 @@ class Correlation:
 
 
 def generate_initial_var(
-    var_params: HestonParams, size: Union[int, tuple[int, ...]]
+    var_params: HestonParams, size: Union[int, Tuple[int, ...]]
 ) -> NP_ARRAY:
     """
     :param var_params: Heston parameters
@@ -122,7 +122,7 @@ def generate_heston_processes(
     num_path: int,
     length: int,
     time_delta: float,
-) -> tuple[NP_ARRAY, NP_ARRAY]:
+) -> Tuple[NP_ARRAY, NP_ARRAY]:
     """
     Kahl, C., & Jäckel, P. (2006). Fast strong approximation Monte Carlo schemes for stochastic volatility models. Quantitative Finance, 6(6), 513-536.
 
@@ -160,7 +160,7 @@ def generate_inefficient_market(
     num_path: int,
     length: int,
     time_delta: float,
-) -> tuple[NP_ARRAY, NP_ARRAY, NP_ARRAY]:
+) -> Tuple[NP_ARRAY, NP_ARRAY, NP_ARRAY]:
     """
     :param real_var_params: realzied Heston paremters
     :param imp_var_params: implied Heston paremters
