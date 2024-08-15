@@ -179,8 +179,6 @@ class WeightedVarianceSwap(ABC):
         Return variance Vega P&L
 
         :param price_0: price at time 0
-        :param imp_var_0: instantaneous implied variance at time 0
-        :param tau_0: time to expiry in years at time 0
         :param imp_var_t: instantaneous implied variance at time t
         :param exp_imp_var_t: E[imp_var_t|imp_var_0]
         :param tau_t: time to expiry in years at time t

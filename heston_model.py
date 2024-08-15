@@ -127,8 +127,8 @@ def generate_heston_processes(
     Kahl, C., & Jäckel, P. (2006). Fast strong approximation Monte Carlo schemes for stochastic volatility models. Quantitative Finance, 6(6), 513-536.
 
     :param var_params: Heston paremters
-    :param normal_var: i.i.d. standard normal random vector
-    :param normal_var: i.i.d. standard normal random vector
+    :param normal_var_1: i.i.d. standard normal random vector
+    :param normal_var_2: i.i.d. standard normal random vector
     :param rho: corr bewteen normal var 1 and normal var 2
     :param num_path: number of paths
     :param length: length of a path
