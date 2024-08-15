@@ -45,16 +45,25 @@ class WeightedVarianceSwap(ABC):
         :param tau: time to expiry in years
         """
 
-    def var_skew_stikiness_ratio(self, *, real_var: NP_ARRAY, imp_var: NP_ARRAY) -> NP_ARRAY:
+    def var_skew_stikiness_ratio(
+        self, *, real_var: NP_ARRAY, imp_var: NP_ARRAY
+    ) -> NP_ARRAY:
         """
         SSR with respect to implied instantaneous variance = d imp_var d log(F) / (d log(F))^2
 
         :param real_var: instantaneous realized variance
         :param imp_var: instantanoues implied variance
         """
-        return self.corr.rho_spot_imp * self.imp_var_param.vol_of_var * np.sqrt(imp_var) / np.sqrt(real_var)
+        return (
+            self.corr.rho_spot_imp
+            * self.imp_var_param.vol_of_var
+            * np.sqrt(imp_var)
+            / np.sqrt(real_var)
+        )
 
-    def min_var_delta(self, *, real_var: NP_ARRAY, imp_var: NP_ARRAY, tau: NP_ARRAY) -> NP_ARRAY:
+    def min_var_delta(
+        self, *, real_var: NP_ARRAY, imp_var: NP_ARRAY, tau: NP_ARRAY
+    ) -> NP_ARRAY:
         """
         Return minimum variance delta
 
@@ -62,7 +71,9 @@ class WeightedVarianceSwap(ABC):
         :param imp_var: instantanoues implied variance
         :param tau: time to expiry in years
         """
-        return self.var_vega(tau) * self.var_skew_stikiness_ratio(real_var=real_var, imp_var=imp_var)
+        return self.var_vega(tau) * self.var_skew_stikiness_ratio(
+            real_var=real_var, imp_var=imp_var
+        )
 
     @abstractmethod
     def total_pnl(
@@ -120,7 +131,9 @@ class WeightedVarianceSwap(ABC):
             tau_t=tau_t,
         )
 
-    def theta_pnl_from_initial_price(self, *, price_0: NP_ARRAY, exp_imp_var_t: NP_ARRAY, tau_t: NP_ARRAY) -> NP_ARRAY:
+    def theta_pnl_from_initial_price(
+        self, *, price_0: NP_ARRAY, exp_imp_var_t: NP_ARRAY, tau_t: NP_ARRAY
+    ) -> NP_ARRAY:
         """
         Return expected Theta P&L at time 0
 
@@ -174,7 +187,9 @@ class WeightedVarianceSwap(ABC):
         return (
             price_t
             - price_0
-            - self.theta_pnl_from_initial_price(price_0=price_0, exp_imp_var_t=exp_imp_var_t, tau_t=tau_t)
+            - self.theta_pnl_from_initial_price(
+                price_0=price_0, exp_imp_var_t=exp_imp_var_t, tau_t=tau_t
+            )
         )
 
     def vega_hedge_pnl(
@@ -195,7 +210,9 @@ class WeightedVarianceSwap(ABC):
         :param imp_var_0: instantaneous implied variance at time 0
         :param tau_0: time to expiry in years at time 0
         """
-        return -self.min_var_delta(real_var=real_var_0, imp_var=imp_var_0, tau=tau_0) * (f_t - f_0)
+        return -self.min_var_delta(
+            real_var=real_var_0, imp_var=imp_var_0, tau=tau_0
+        ) * (f_t - f_0)
 
 
 class VarianceSwap(WeightedVarianceSwap):
@@ -230,7 +247,9 @@ class VarianceSwap(WeightedVarianceSwap):
         price_0 = self.price(imp_var=imp_var_0, tau=tau_0)
         price_t = self.price(imp_var=imp_var_t, tau=tau_t)
         gamma_pnl = self.gamma_pnl(f_0=f_0, f_t=f_t)
-        vega_hedge_pnl = self.vega_hedge_pnl(f_0=f_0, f_t=f_t, real_var_0=real_var_0, imp_var_0=imp_var_0, tau_0=tau_0)
+        vega_hedge_pnl = self.vega_hedge_pnl(
+            f_0=f_0, f_t=f_t, real_var_0=real_var_0, imp_var_0=imp_var_0, tau_0=tau_0
+        )
         return price_t - price_0 + gamma_pnl + vega_hedge_pnl
 
     @staticmethod

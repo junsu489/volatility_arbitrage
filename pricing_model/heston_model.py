@@ -40,7 +40,9 @@ class Correlation:
     def __post_init__(self) -> None:
         for field_name, value in self.__dict__.items():
             if 1 <= abs(value):
-                raise ValueError(f"Value of '{field_name}' must be between -1 and 1. Got {value} instead.")
+                raise ValueError(
+                    f"Value of '{field_name}' must be between -1 and 1. Got {value} instead."
+                )
 
         # Construct the correlation matrix
         corr_matrix = np.array(
@@ -54,10 +56,14 @@ class Correlation:
         try:
             self.cholesky = np.linalg.cholesky(corr_matrix)
         except np.linalg.LinAlgError as exc:
-            raise ValueError("The correlation matrix is not positive definite.") from exc
+            raise ValueError(
+                "The correlation matrix is not positive definite."
+            ) from exc
 
 
-def generate_initial_var(var_params: HestonParams, size: Union[int, Tuple[int, ...]]) -> NP_ARRAY:
+def generate_initial_var(
+    var_params: HestonParams, size: Union[int, Tuple[int, ...]]
+) -> NP_ARRAY:
     """
     :param var_params: Heston parameters
     :param size: size
@@ -96,8 +102,16 @@ def generate_cir_processs(
     mean_reversion_adj = 1 / (1 + var_params.kappa * time_delta)
     milstein_adj = 0.25 * var_params.vol_of_var**2 * (normal_var**2 - 1) * time_delta
     for i in range(length):
-        diffusion = var_params.vol_of_var * np.sqrt(var[i]) * normal_var[i] * np.sqrt(time_delta)
-        var[i + 1] = np.maximum(var[i] + drift + diffusion + milstein_adj[i], 0) * mean_reversion_adj
+        diffusion = (
+            var_params.vol_of_var
+            * np.sqrt(var[i])
+            * normal_var[i]
+            * np.sqrt(time_delta)
+        )
+        var[i + 1] = (
+            np.maximum(var[i] + drift + diffusion + milstein_adj[i], 0)
+            * mean_reversion_adj
+        )
 
     return var
 
@@ -125,7 +139,9 @@ def generate_heston_processes(
     :param time_delta: time delta in years
     :return: log return and instantaneous variance
     """
-    var = generate_cir_processs(var_params, normal_var_1, num_path, length, time_delta)
+    var = generate_cir_processs(
+        var_0, var_params, normal_var_1, num_path, length, time_delta
+    )
     vol = np.sqrt(var)
     lr = np.zeros((length + 1, num_path))
 
@@ -135,7 +151,9 @@ def generate_heston_processes(
     drift = -0.5 * avg_var * time_delta
     corr_diffusion = rho * vol[:1] * normal_var_1 * np.sqrt(time_delta)
     uncorr_diffusion = avg_vol * normal_var_2 * np.sqrt(time_delta)
-    milstein_correction = 0.5 * rho * var_params.vol_of_var * (normal_var_2**2 - 1) * time_delta
+    milstein_correction = (
+        0.5 * rho * var_params.vol_of_var * (normal_var_2**2 - 1) * time_delta
+    )
     lr[1:] = drift + corr_diffusion + uncorr_diffusion + milstein_correction
     return lr, var
 
@@ -164,6 +182,7 @@ def generate_inefficient_market(
     """
     normal_var = np.random.normal(size=(3, length, num_path))
     lr, real_var = generate_heston_processes(
+        var_0=real_var_0,
         var_params=real_var_params,
         normal_var_1=normal_var[0],
         normal_var_2=normal_var[1],
@@ -174,7 +193,11 @@ def generate_inefficient_market(
     )
 
     correlated_normal = (
-        corr.cholesky[2][0] * normal_var[0] + corr.cholesky[2][1] * normal_var[1] + corr.cholesky[2][2] * normal_var[2]
+        corr.cholesky[2][0] * normal_var[0]
+        + corr.cholesky[2][1] * normal_var[1]
+        + corr.cholesky[2][2] * normal_var[2]
     )
-    imp_var = generate_cir_processs(imp_var_params, correlated_normal, num_path, length, time_delta)
+    imp_var = generate_cir_processs(
+        imp_var_0, imp_var_params, correlated_normal, num_path, length, time_delta
+    )
     return lr, real_var, imp_var
