@@ -3,15 +3,16 @@ requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
+name = "volatility_arbitrage"
+version = "0.1.0"
 authors = [
     { name="Junsu Park", email="junsu489@gmail.com" }
 ]
 readme = "README.md"
-requires-python = "3.10.1"
+requires-python = ">=3.10"
 
-[project.dependencies]
-python = "^3.10.1"
-numpy = "^1.26.4"
+[tool.setuptools.packages.find]
+where = ["volatility_arbitrage"]
 
 [tool.pylint.main]
 load-plugins = ["pylint.extensions.docparams"]
