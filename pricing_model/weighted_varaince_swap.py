@@ -7,7 +7,8 @@ from abc import ABC, abstractmethod
 import numpy as np
 import numpy.typing as npt
 
-from volatility_arbitrage.heston_model import Correlation, HestonParams
+from volatility_arbitrage.pricing_model.heston_model import (Correlation,
+                                                             HestonParams)
 
 NP_ARRAY = npt.NDArray[np.float64]
 
