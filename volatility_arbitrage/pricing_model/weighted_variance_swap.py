@@ -7,8 +7,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 import numpy.typing as npt
 
-from volatility_arbitrage.pricing_model.heston_model import (Correlation,
-                                                             HestonParams)
+from volatility_arbitrage.pricing_model.heston_model import Correlation, HestonParams
 
 NP_ARRAY = npt.NDArray[np.float64]
 
@@ -46,9 +45,7 @@ class WeightedVarianceSwap(ABC):
         :param tau: time to expiry in years
         """
 
-    def var_skew_stikiness_ratio(
-        self, *, real_var: NP_ARRAY, imp_var: NP_ARRAY
-    ) -> NP_ARRAY:
+    def var_skew_stikiness_ratio(self, *, real_var: NP_ARRAY, imp_var: NP_ARRAY) -> NP_ARRAY:
         """
         SSR with respect to implied instantaneous variance = d imp_var d log(F) / (d log(F))^2
 
@@ -62,9 +59,7 @@ class WeightedVarianceSwap(ABC):
             / np.sqrt(real_var)
         )
 
-    def min_var_delta(
-        self, *, real_var: NP_ARRAY, imp_var: NP_ARRAY, tau: NP_ARRAY
-    ) -> NP_ARRAY:
+    def min_var_delta(self, *, real_var: NP_ARRAY, imp_var: NP_ARRAY, tau: NP_ARRAY) -> NP_ARRAY:
         """
         Return minimum variance delta
 
@@ -211,9 +206,7 @@ class WeightedVarianceSwap(ABC):
         :param imp_var_0: instantaneous implied variance at time 0
         :param tau_0: time to expiry in years at time 0
         """
-        return -self.min_var_delta(
-            real_var=real_var_0, imp_var=imp_var_0, tau=tau_0
-        ) * (f_t - f_0)
+        return -self.min_var_delta(real_var=real_var_0, imp_var=imp_var_0, tau=tau_0) * (f_t - f_0)
 
 
 class VarianceSwap(WeightedVarianceSwap):
