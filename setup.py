@@ -1,7 +1,7 @@
-from setuptools import find_packages, setup
+from setuptools import find_packages, setup  # type: ignore [import-untyped]
 
 setup(
-    name="volatility_arbitrage",  # The name of your package
-    version="0.1.0",  # Initial version
-    packages=find_packages(),  # Automatically find all packages and sub-packages
+    name="volatility_arbitrage",
+    version="0.1.0",
+    packages=find_packages(include=["volatility_arbitrage", "volatility_arbitrage.*"]),
 )
