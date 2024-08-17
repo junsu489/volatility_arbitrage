@@ -20,12 +20,12 @@ class WeightedVarianceSwap(ABC):
 
     def __init__(
         self,
-        imp_var_param: HestonParams,
-        real_var_param: HestonParams,
+        imp_var_params: HestonParams,
+        real_var_params: HestonParams,
         corr: Correlation,
     ) -> None:
-        self.imp_var_param = imp_var_param
-        self.real_var_param = real_var_param
+        self.imp_var_params = imp_var_params
+        self.real_var_params = real_var_params
         self.corr = corr
 
     @abstractmethod
@@ -54,7 +54,7 @@ class WeightedVarianceSwap(ABC):
         """
         return (
             self.corr.rho_spot_imp
-            * self.imp_var_param.vol_of_var
+            * self.imp_var_params.vol_of_var
             * np.sqrt(imp_var)
             / np.sqrt(real_var)
         )
@@ -71,7 +71,6 @@ class WeightedVarianceSwap(ABC):
             real_var=real_var, imp_var=imp_var
         )
 
-    @abstractmethod
     def total_pnl(
         self,
         *,
@@ -94,9 +93,19 @@ class WeightedVarianceSwap(ABC):
         :param imp_var_t: instantaneous implied variance at time t
         :param tau_t: time to expiry in years at time t
         """
+        price_0 = self.price(imp_var=imp_var_0, tau=tau_0)
+        price_t = self.price(imp_var=imp_var_t, tau=tau_t)
+        vanna_pnl = self.vanna_pnl(
+            imp_var_0=imp_var_0, tau_0=tau_0, imp_var_t=imp_var_t, tau_t=tau_t, f_0=f_0, f_t=f_t
+        )
+        gamma_pnl = self.gamma_pnl(f_0=f_0, f_t=f_t)
+        vega_hedge_pnl = self.vega_hedge_pnl(
+            f_0=f_0, f_t=f_t, real_var_0=real_var_0, imp_var_0=imp_var_0, tau_0=tau_0
+        )
+        return price_t - price_0 + vanna_pnl + gamma_pnl + vega_hedge_pnl
 
-    @abstractmethod
     @staticmethod
+    @abstractmethod
     def gamma_pnl(*, f_0: NP_ARRAY, f_t: NP_ARRAY) -> NP_ARRAY:
         """
         Return Gamma P&L
@@ -164,6 +173,28 @@ class WeightedVarianceSwap(ABC):
             tau_t=tau_t,
         )
 
+    @abstractmethod
+    def vanna_pnl(
+        self,
+        *,
+        imp_var_0: NP_ARRAY,
+        tau_0: NP_ARRAY,
+        imp_var_t: NP_ARRAY,
+        tau_t: NP_ARRAY,
+        f_0: NP_ARRAY,
+        f_t: NP_ARRAY,
+    ) -> NP_ARRAY:
+        """
+        Return Vanna P&L
+
+        :param imp_var_0: instantaneous implied variance at time 0
+        :param tau_0: time to expiry in years at time 0
+        :param imp_var_t: instantaneous implied variance at time t
+        :param tau_t: time to expiry in years at time t
+        :param f_0: forward price at time 0
+        :param f_t: forward price at time t
+        """
+
     def var_vega_from_initial_price(
         self,
         price_0: NP_ARRAY,
@@ -218,33 +249,26 @@ class VarianceSwap(WeightedVarianceSwap):
 
     def price(self, *, imp_var: NP_ARRAY, tau: NP_ARRAY) -> NP_ARRAY:
         return (
-            self.imp_var_param.mean_of_var * tau
-            + (imp_var - self.imp_var_param.mean_of_var)
-            * (1 - np.exp(-self.imp_var_param.kappa * tau))
-            / self.imp_var_param.kappa
+            self.imp_var_params.mean_of_var * tau
+            + (imp_var - self.imp_var_params.mean_of_var)
+            * (1 - np.exp(-self.imp_var_params.kappa * tau))
+            / self.imp_var_params.kappa
         )
 
     def var_vega(self, tau: NP_ARRAY) -> NP_ARRAY:
-        return (1 - np.exp(-self.imp_var_param.kappa * tau)) / self.imp_var_param.kappa
+        return (1 - np.exp(-self.imp_var_params.kappa * tau)) / self.imp_var_params.kappa
 
-    def total_pnl(
+    def vanna_pnl(
         self,
         *,
-        f_0: NP_ARRAY,
-        f_t: NP_ARRAY,
-        real_var_0: NP_ARRAY,
         imp_var_0: NP_ARRAY,
         tau_0: NP_ARRAY,
         imp_var_t: NP_ARRAY,
         tau_t: NP_ARRAY,
+        f_0: NP_ARRAY,
+        f_t: NP_ARRAY,
     ) -> NP_ARRAY:
-        price_0 = self.price(imp_var=imp_var_0, tau=tau_0)
-        price_t = self.price(imp_var=imp_var_t, tau=tau_t)
-        gamma_pnl = self.gamma_pnl(f_0=f_0, f_t=f_t)
-        vega_hedge_pnl = self.vega_hedge_pnl(
-            f_0=f_0, f_t=f_t, real_var_0=real_var_0, imp_var_0=imp_var_0, tau_0=tau_0
-        )
-        return price_t - price_0 + gamma_pnl + vega_hedge_pnl
+        return np.zeros_like(imp_var_0)
 
     @staticmethod
     def gamma_pnl(*, f_0: NP_ARRAY, f_t: NP_ARRAY) -> NP_ARRAY:
