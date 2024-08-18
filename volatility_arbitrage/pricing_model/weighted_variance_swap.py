@@ -3,23 +3,14 @@
 # pylint: disable=line-too-long, too-many-arguments,too-many-locals
 
 from abc import ABC, abstractmethod
-from typing import TypedDict
 
 import numpy as np
 import numpy.typing as npt
 
-from volatility_arbitrage.pricing_model.heston_model import Correlation, HestonParams
+from volatility_arbitrage.pricing_model.interface import (Correlation, HestonParams,
+                                                          StrategyPnlCalculator)
 
 ARRAY = npt.NDArray[np.float64]
-
-
-class PnlDecomposition(TypedDict):
-    total_pnl: ARRAY
-    var_vega_pnl: ARRAY
-    theta_pnl: ARRAY
-    vanna_pnl: ARRAY
-    gamma_pnl: ARRAY
-    vega_hedge_pnl: ARRAY
 
 
 class WeightedVarianceSwap(ABC):
@@ -90,7 +81,7 @@ class WeightedVarianceSwap(ABC):
         ssr = self.var_skew_stikiness_ratio(real_var=real_var_0, imp_var=imp_var_0)
         return forward_var_vega * ssr / f_0
 
-    def calculate_pnl(
+    def get_pnl_calculator(
         self,
         *,
         f_0: ARRAY,
@@ -100,7 +91,7 @@ class WeightedVarianceSwap(ABC):
         tau_0: ARRAY,
         imp_var_t: ARRAY,
         tau_t: ARRAY,
-    ) -> PnlDecomposition:
+    ) -> StrategyPnlCalculator:
         """
         :param f_0: forward price at time 0
         :param f_t: forward price at time t
@@ -109,7 +100,7 @@ class WeightedVarianceSwap(ABC):
         :param tau_0: time to expiry in years at time 0
         :param imp_var_t: instantaneous implied variance at time t
         :param tau_t: time to expiry in years at time t
-        :return: P&L breakdown
+        :return: StrategyPnlCalculator
         """
         var_vega_pnl = self.var_vega_pnl(
             imp_var_0=imp_var_0, tau_0=tau_0, imp_var_t=imp_var_t, tau_t=tau_t
@@ -123,7 +114,7 @@ class WeightedVarianceSwap(ABC):
             f_0=f_0, f_t=f_t, real_var_0=real_var_0, imp_var_0=imp_var_0, tau_0=tau_0, tau_t=tau_t
         )
         total_pnl = var_vega_pnl + theta_pnl + vanna_pnl + gamma_pnl + vega_hedge_pnl
-        return PnlDecomposition(
+        return StrategyPnlCalculator(
             total_pnl=total_pnl,
             var_vega_pnl=var_vega_pnl,
             theta_pnl=theta_pnl,
