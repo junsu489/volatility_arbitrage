@@ -8,7 +8,7 @@ from typing import Tuple, Union
 import numpy as np
 import numpy.typing as npt
 
-NP_ARRAY = npt.NDArray[np.float64]
+ARRAY = npt.NDArray[np.float64]
 
 
 @dataclass
@@ -35,7 +35,7 @@ class Correlation:
     rho_spot_real: float
     rho_real_imp: float
 
-    cholesky: NP_ARRAY = field(init=False, repr=False)
+    cholesky: ARRAY = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         for field_name, value in self.__dict__.items():
@@ -59,7 +59,19 @@ class Correlation:
             raise ValueError("The correlation matrix is not positive definite.") from exc
 
 
-def generate_initial_var(var_params: HestonParams, size: Union[int, Tuple[int, ...]]) -> NP_ARRAY:
+def predict_var(var_params: HestonParams, var: ARRAY, time_delta: ARRAY) -> ARRAY:
+    """
+    :param var_params: Heston parameters
+    :param var_0: instantaneous_variance at time 0
+    :param time_delta: time delta in years
+    :return: expected instantaneous variance time_delta later
+    """
+    return var_params.mean_of_var + (var - var_params.mean_of_var) * np.exp(
+        -var_params.kappa * time_delta
+    )
+
+
+def generate_initial_var(var_params: HestonParams, size: Union[int, Tuple[int, ...]]) -> ARRAY:
     """
     :param var_params: Heston parameters
     :param size: size
@@ -73,11 +85,11 @@ def generate_initial_var(var_params: HestonParams, size: Union[int, Tuple[int, .
 def generate_cir_processs(
     var_0: float,
     var_params: HestonParams,
-    normal_var: NP_ARRAY,
+    normal_var: ARRAY,
     num_path: int,
     length: int,
     time_delta: float,
-) -> NP_ARRAY:
+) -> ARRAY:
     """
     Kahl, C., & Jäckel, P. (2006). Fast strong approximation Monte Carlo schemes for stochastic volatility models. Quantitative Finance, 6(6), 513-536.
 
@@ -109,13 +121,13 @@ def generate_cir_processs(
 def generate_heston_processes(
     var_0: float,
     var_params: HestonParams,
-    normal_var_1: NP_ARRAY,
-    normal_var_2: NP_ARRAY,
+    normal_var_1: ARRAY,
+    normal_var_2: ARRAY,
     rho: float,
     num_path: int,
     length: int,
     time_delta: float,
-) -> Tuple[NP_ARRAY, NP_ARRAY]:
+) -> Tuple[ARRAY, ARRAY]:
     """
     Kahl, C., & Jäckel, P. (2006). Fast strong approximation Monte Carlo schemes for stochastic volatility models. Quantitative Finance, 6(6), 513-536.
 
@@ -154,7 +166,7 @@ def generate_inefficient_market(
     num_path: int,
     length: int,
     time_delta: float,
-) -> Tuple[NP_ARRAY, NP_ARRAY, NP_ARRAY]:
+) -> Tuple[ARRAY, ARRAY, ARRAY]:
     """
     :param real_var_0: initial realized variance
     :param imp_var_0: initial implied variance
