@@ -3,6 +3,7 @@
 # pylint: disable=line-too-long, too-many-arguments,too-many-locals
 
 from abc import ABC, abstractmethod
+from typing import TypedDict
 
 import numpy as np
 import numpy.typing as npt
@@ -10,6 +11,15 @@ import numpy.typing as npt
 from volatility_arbitrage.pricing_model.heston_model import Correlation, HestonParams
 
 ARRAY = npt.NDArray[np.float64]
+
+
+class PnlDecomposition(TypedDict):
+    total_pnl: ARRAY
+    var_vega_pnl: ARRAY
+    theta_pnl: ARRAY
+    vanna_pnl: ARRAY
+    gamma_pnl: ARRAY
+    vega_hedge_pnl: ARRAY
 
 
 class WeightedVarianceSwap(ABC):
@@ -79,7 +89,7 @@ class WeightedVarianceSwap(ABC):
         ssr = self.var_skew_stikiness_ratio(real_var=real_var, imp_var=imp_var)
         return forward_var_vega * ssr
 
-    def total_pnl(
+    def calculate_pnl(
         self,
         *,
         f_0: ARRAY,
@@ -89,7 +99,7 @@ class WeightedVarianceSwap(ABC):
         tau_0: ARRAY,
         imp_var_t: ARRAY,
         tau_t: ARRAY,
-    ) -> ARRAY:
+    ) -> PnlDecomposition:
         """
         :param f_0: forward price at time 0
         :param f_t: forward price at time t
@@ -98,10 +108,12 @@ class WeightedVarianceSwap(ABC):
         :param tau_0: time to expiry in years at time 0
         :param imp_var_t: instantaneous implied variance at time t
         :param tau_t: time to expiry in years at time t
-        :return: total P&L
+        :return: P&L breakdown
         """
-        price_0 = self.price(imp_var=imp_var_0, tau=tau_0)
-        price_t = self.price(imp_var=imp_var_t, tau=tau_t)
+        var_vega_pnl = self.var_vega_pnl(
+            imp_var_0=imp_var_0, tau_0=tau_0, imp_var_t=imp_var_t, tau_t=tau_t
+        )
+        theta_pnl = self.theta_pnl(imp_var_0=imp_var_0, tau_0=tau_0, tau_t=tau_t)
         vanna_pnl = self.vanna_pnl(
             imp_var_0=imp_var_0, tau_0=tau_0, imp_var_t=imp_var_t, tau_t=tau_t, f_0=f_0, f_t=f_t
         )
@@ -109,7 +121,15 @@ class WeightedVarianceSwap(ABC):
         vega_hedge_pnl = self.vega_hedge_pnl(
             f_0=f_0, f_t=f_t, real_var_0=real_var_0, imp_var_0=imp_var_0, tau_0=tau_0, tau_t=tau_t
         )
-        return price_t - price_0 + vanna_pnl + gamma_pnl + vega_hedge_pnl
+        total_pnl = var_vega_pnl + theta_pnl + vanna_pnl + gamma_pnl + vega_hedge_pnl
+        return PnlDecomposition(
+            total_pnl=total_pnl,
+            var_vega_pnl=var_vega_pnl,
+            theta_pnl=theta_pnl,
+            vanna_pnl=vanna_pnl,
+            gamma_pnl=gamma_pnl,
+            vega_hedge_pnl=vega_hedge_pnl,
+        )
 
     @staticmethod
     @abstractmethod
@@ -147,7 +167,6 @@ class WeightedVarianceSwap(ABC):
         :param imp_var_0: instantaneous implied variance at time 0
         :param tau_0: time to expiry in years at time 0
         :param imp_var_t: instantaneous implied variance at time t
-        :param exp_imp_var_t: E[imp_var_t|imp_var_0]
         :param tau_t: time to expiry in years at time t
         :return: variance Vega P&L
         """
