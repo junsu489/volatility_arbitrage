@@ -75,19 +75,20 @@ class WeightedVarianceSwap(ABC):
         )
 
     def min_var_delta(
-        self, *, real_var: ARRAY, imp_var: ARRAY, tau_0: ARRAY, tau_t: ARRAY
+        self, *, real_var_0: ARRAY, imp_var_0: ARRAY, f_0: ARRAY, tau_0: ARRAY, tau_t: ARRAY
     ) -> ARRAY:
         """
-        :param real_var: instantaneous realized variance
-        :param imp_var: instantanoues implied variance
+        :param real_var_0: instantaneous realized variance at time 0
+        :param imp_var_0: instantanoues implied variance at time 0
+        :param f_0: forward price at time 0
         :param tau_0: time to expiry in years at time 0
         :param tau_t: time to expiry in years at time t
         :return: minimum variance delta
         """
         # forward_var_vega is used because at the next timestamp variance between time 0 and 1 is not a risk.
         forward_var_vega = self.forward_var_vega(tau_front=tau_0 - tau_t, tau_back=tau_0)
-        ssr = self.var_skew_stikiness_ratio(real_var=real_var, imp_var=imp_var)
-        return forward_var_vega * ssr
+        ssr = self.var_skew_stikiness_ratio(real_var=real_var_0, imp_var=imp_var_0)
+        return forward_var_vega * ssr / f_0
 
     def calculate_pnl(
         self,
@@ -153,7 +154,7 @@ class WeightedVarianceSwap(ABC):
         :param tau_t: time to expiry in years at time t
         :return: expected Theta P&L at time 0
         """
-        return -self.price(imp_var=imp_var_0, tau=tau_t - tau_0)
+        return -self.price(imp_var=imp_var_0, tau=tau_0 - tau_t)
 
     def var_vega_pnl(
         self,
@@ -216,7 +217,7 @@ class WeightedVarianceSwap(ABC):
         :return: Vega hedge P&L
         """
         min_var_delta = self.min_var_delta(
-            real_var=real_var_0, imp_var=imp_var_0, tau_0=tau_0, tau_t=tau_t
+            real_var_0=real_var_0, imp_var_0=imp_var_0, f_0=f_0, tau_0=tau_0, tau_t=tau_t
         )
         return -min_var_delta * (f_t - f_0)
 
