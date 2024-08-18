@@ -18,7 +18,7 @@ where = ["volatility_arbitrage"]
 line-length = 100
 
 [tool.isort]
-line_length = 100
+profile = "black"
 
 [tool.pylint.main]
 load-plugins = ["pylint.extensions.docparams"]
