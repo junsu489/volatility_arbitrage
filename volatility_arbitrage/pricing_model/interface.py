@@ -64,30 +64,21 @@ class StrategyPnl(TypedDict):
     vega_hedge_pnl: ARRAY
 
 
+@dataclass
 class StrategyPnlCalculator:
-    _total_pnl: ARRAY
-    _var_vega_pnl: ARRAY
-    _theta_pnl: ARRAY
-    _vanna_pnl: ARRAY
-    _gamma_pnl: ARRAY
-    _vega_hedge_pnl: ARRAY
-
-    def __init__(
-        self, total_pnl, var_vega_pnl, theta_pnl, vanna_pnl, gamma_pnl, vega_hedge_pnl
-    ) -> None:
-        self._total_pnl = total_pnl
-        self._var_vega_pnl = var_vega_pnl
-        self._theta_pnl = theta_pnl
-        self._vanna_pnl = vanna_pnl
-        self._gamma_pnl = gamma_pnl
-        self._vega_hedg_pnl = vega_hedge_pnl
+    total_pnl: ARRAY
+    var_vega_pnl: ARRAY
+    theta_pnl: ARRAY
+    vanna_pnl: ARRAY
+    gamma_pnl: ARRAY
+    vega_hedge_pnl: ARRAY
 
     def get_strategy_pnl(self, position: npt.NDArray[np.float64]) -> StrategyPnl:
         return StrategyPnl(
-            total_pnl=self._total_pnl * position,
-            var_vega_pnl=self._var_vega_pnl * position,
-            theta_pnl=self._theta_pnl * position,
-            vanna_pnl=self._vanna_pnl * position,
-            gamma_pnl=self._gamma_pnl * position,
-            vega_hedge_pnl=self._vega_hedge_pnl * position,
+            total_pnl=self.total_pnl * position,
+            var_vega_pnl=self.var_vega_pnl * position,
+            theta_pnl=self.theta_pnl * position,
+            vanna_pnl=self.vanna_pnl * position,
+            gamma_pnl=self.gamma_pnl * position,
+            vega_hedge_pnl=self.vega_hedge_pnl * position,
         )
