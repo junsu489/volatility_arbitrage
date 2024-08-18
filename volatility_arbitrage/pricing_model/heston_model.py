@@ -12,18 +12,6 @@ from volatility_arbitrage.pricing_model.interface import Correlation, HestonPara
 ARRAY = npt.NDArray[np.float64]
 
 
-def predict_var(var_params: HestonParams, var: ARRAY, time_delta: ARRAY) -> ARRAY:
-    """
-    :param var_params: Heston parameters
-    :param var_0: instantaneous_variance at time 0
-    :param time_delta: time delta in years
-    :return: expected instantaneous variance time_delta later
-    """
-    return var_params.mean_of_var + (var - var_params.mean_of_var) * np.exp(
-        -var_params.kappa * time_delta
-    )
-
-
 def generate_initial_var(var_params: HestonParams, size: Union[int, Tuple[int, ...]]) -> ARRAY:
     """
     :param var_params: Heston parameters

@@ -1,3 +1,5 @@
+"""interface of pricing model"""
+
 from dataclasses import dataclass, field
 from typing import TypedDict
 
@@ -56,6 +58,8 @@ class Correlation:
 
 
 class StrategyPnl(TypedDict):
+    """strategy pnl dictionary"""
+
     total_pnl: ARRAY
     var_vega_pnl: ARRAY
     theta_pnl: ARRAY
@@ -66,6 +70,8 @@ class StrategyPnl(TypedDict):
 
 @dataclass
 class StrategyPnlCalculator:
+    """strategy pnl calculator"""
+
     total_pnl: ARRAY
     var_vega_pnl: ARRAY
     theta_pnl: ARRAY
@@ -74,6 +80,7 @@ class StrategyPnlCalculator:
     vega_hedge_pnl: ARRAY
 
     def get_strategy_pnl(self, position: npt.NDArray[np.float64]) -> StrategyPnl:
+        """calculate pnl of a strategy"""
         return StrategyPnl(
             total_pnl=self.total_pnl * position,
             var_vega_pnl=self.var_vega_pnl * position,
