@@ -7,11 +7,8 @@ from abc import ABC, abstractmethod
 import numpy as np
 import numpy.typing as npt
 
-from volatility_arbitrage.pricing_model.interface import (
-    Correlation,
-    HestonParams,
-    StrategyPnlCalculator,
-)
+from volatility_arbitrage.pricing_model.interface import (Correlation, HestonParams,
+                                                          StrategyPnlCalculator)
 
 ARRAY = npt.NDArray[np.float64]
 
