@@ -37,7 +37,7 @@ class Correlation:
 
     def __post_init__(self) -> None:
         for field_name, value in self.__dict__.items():
-            if 1 <= abs(value):
+            if 1 < abs(value):
                 raise ValueError(
                     f"Value of '{field_name}' must be between -1 and 1. Got {value} instead."
                 )

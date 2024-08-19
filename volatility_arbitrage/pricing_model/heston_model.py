@@ -90,8 +90,8 @@ def generate_heston_processes(
     avg_vol = 0.5 * (vol[:-1] + vol[1:])
 
     drift = -0.5 * avg_var * time_delta
-    corr_diffusion = rho * vol[:1] * normal_var_1 * np.sqrt(time_delta)
-    uncorr_diffusion = avg_vol * normal_var_2 * np.sqrt(time_delta)
+    corr_diffusion = rho * vol[:-1] * normal_var_1 * np.sqrt(time_delta)
+    uncorr_diffusion = np.sqrt(1 - rho**2) * avg_vol * normal_var_2 * np.sqrt(time_delta)
     milstein_correction = 0.5 * rho * var_params.vol_of_var * (normal_var_2**2 - 1) * time_delta
     lr[1:] = drift + corr_diffusion + uncorr_diffusion + milstein_correction
     return lr, var
