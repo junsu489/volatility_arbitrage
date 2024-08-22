@@ -3,12 +3,12 @@
 # pylint: disable=line-too-long, too-many-arguments,too-many-locals
 
 from abc import ABC, abstractmethod
-from typing import Tuple
 
 import numpy as np
 import numpy.typing as npt
 
 from volatility_arbitrage.pricing_model.interface import (
+    HestonParams,
     MarketModel,
     StrategyPnlCalculator,
 )
@@ -248,9 +248,7 @@ class VarianceSwap(WeightedVarianceSwap):
         )
 
     def var_vega(self, tau: ARRAY) -> ARRAY:
-        return (
-            1 - np.exp(-self.market_model.imp_model.kappa * tau)
-        ) / self.market_model.imp_model.kappa
+        return self.var_swap_var_vega(tau=tau, kappa=self.market_model.imp_model.kappa)
 
     def vanna_pnl(
         self,
@@ -276,25 +274,25 @@ class GammaSwap(WeightedVarianceSwap):
 
     """
 
-    def _get_adjusted_kappa_mean_of_var(self) -> Tuple[float, float]:
-        rho = self.market_model.imp_model.rho
-        kappa = self.market_model.imp_model.kappa
-        mean_of_var = self.market_model.imp_model.mean_of_var
-        vol_of_var = self.market_model.imp_model.vol_of_var
-        kappa_adj = kappa - vol_of_var * rho
-        mean_of_var_adj = kappa / kappa_adj * mean_of_var
-        return kappa_adj, mean_of_var_adj
+    @staticmethod
+    def _get_adjusted_kappa(model_params: HestonParams) -> float:
+        return model_params.kappa - model_params.vol_of_var * model_params.rho
+
+    @classmethod
+    def _get_adjusted_mean_of_var(cls, model_params: HestonParams) -> float:
+        kappa_adj = cls._get_adjusted_kappa(model_params)
+        return model_params.kappa / kappa_adj * model_params.mean_of_var
 
     def price(self, *, imp_var: ARRAY, tau: ARRAY) -> ARRAY:
-        kappa_adj, mean_of_var_adj = self._get_adjusted_kappa_mean_of_var()
+        kappa_adj = self._get_adjusted_kappa(self.market_model.imp_model)
+        mean_of_var_adj = self._get_adjusted_mean_of_var(self.market_model.imp_model)
         return self.price_var_swap(
             var=imp_var, tau=tau, mean_of_var=mean_of_var_adj, kappa=kappa_adj
         )
 
     def var_vega(self, tau: ARRAY) -> ARRAY:
-        return (
-            1 - np.exp(-self.market_model.imp_model.kappa * tau)
-        ) / self.market_model.imp_model.kappa
+        kappa_adj = self._get_adjusted_kappa(self.market_model.imp_model)
+        return self.var_swap_var_vega(tau=tau, kappa=kappa_adj)
 
     def vanna_pnl(
         self,
