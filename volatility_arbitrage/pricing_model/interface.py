@@ -1,6 +1,6 @@
 """interface of pricing model"""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TypedDict
 
 import numpy as np
@@ -9,50 +9,50 @@ import numpy.typing as npt
 ARRAY = npt.NDArray[np.float64]
 
 
-@dataclass
+@dataclass(frozen=True)
 class HestonParams:
-    """Heston stochastic volatilty parameters"""
+    """Heston stochastic volatilty model parameters"""
 
     kappa: float
     mean_of_var: float
     vol_of_var: float
+    rho: float
 
     def __post_init__(self) -> None:
         assert self.mean_of_var > 0
         assert self.kappa > 0
         assert self.vol_of_var > 0
+        assert abs(self.rho) < 1
         # Check feller condition
         assert 2 * self.kappa * self.mean_of_var > self.vol_of_var**2
 
 
-@dataclass
-class Correlation:
-    """Correlation among spot price, implied variance, and realized variance processes"""
+@dataclass(frozen=True)
+class MarketModel:
+    """Market model"""
 
-    rho_spot_imp: float
-    rho_spot_real: float
-    rho_real_imp: float
-
-    cholesky: ARRAY = field(init=False, repr=False)
+    imp_model: HestonParams
+    real_model: HestonParams
+    rho_spot_imp_var: float
+    rho_real_var_imp_var: float
 
     def __post_init__(self) -> None:
-        for field_name, value in self.__dict__.items():
-            if 1 < abs(value):
-                raise ValueError(
-                    f"Value of '{field_name}' must be between -1 and 1. Got {value} instead."
-                )
+        assert abs(self.rho_spot_imp_var) < 1
+        assert abs(self.rho_real_var_imp_var) < 1
 
+    def cholesky(self) -> ARRAY:
+        """Cholesky decomposition"""
         # Construct the correlation matrix
         corr_matrix = np.array(
             [
-                [1.0, self.rho_spot_real, self.rho_real_imp],
-                [self.rho_spot_real, 1.0, self.rho_spot_imp],
-                [self.rho_real_imp, self.rho_spot_imp, 1.0],
+                [1.0, self.real_model.rho, self.rho_real_var_imp_var],
+                [self.real_model.rho, 1.0, self.rho_spot_imp_var],
+                [self.rho_real_var_imp_var, self.rho_spot_imp_var, 1.0],
             ]
         )
 
         try:
-            self.cholesky = np.linalg.cholesky(corr_matrix)
+            return np.linalg.cholesky(corr_matrix)
         except np.linalg.LinAlgError as exc:
             raise ValueError("The correlation matrix is not positive definite.") from exc
 
@@ -68,7 +68,7 @@ class StrategyPnl(TypedDict):
     vega_hedge_pnl: ARRAY
 
 
-@dataclass
+@dataclass(frozen=True)
 class StrategyPnlCalculator:
     """strategy pnl calculator"""
 
