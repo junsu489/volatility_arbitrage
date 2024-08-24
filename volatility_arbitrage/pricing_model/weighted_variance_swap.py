@@ -3,10 +3,12 @@
 # pylint: disable=line-too-long, too-many-arguments,too-many-locals
 
 from abc import ABC, abstractmethod
+from typing import Any
 
 import numpy as np
 import numpy.typing as npt
 
+from volatility_arbitrage.pricing_model.heston_model import predict_var
 from volatility_arbitrage.pricing_model.interface import (
     HestonParams,
     MarketModel,
@@ -164,7 +166,13 @@ class WeightedVarianceSwap(ABC):
         :param tau_t: time to expiry in years at time t
         :return: expected Theta P&L at time 0
         """
-        return -self.price(imp_var=imp_var_0, tau=tau_0 - tau_t)
+        exp_imp_var_t = predict_var(
+            var=imp_var_0, time_delta=tau_0 - tau_t, model_params=self.market_model.imp_model
+        )
+        # This is valid as long as the pricing formula is linear with respect to instantanoeus variance
+        return self.price(imp_var=exp_imp_var_t, tau=tau_t) - self.price(
+            imp_var=imp_var_0, tau=tau_0
+        )
 
     def var_vega_pnl(
         self,
@@ -271,7 +279,6 @@ class GammaSwap(WeightedVarianceSwap):
     """
     Standard gamma swap or entropy contract.
     Fukasawa, M. (2014). Volatility derivatives and model-free implied leverage. International Journal of Theoretical and Applied Finance, 17(01), 1450002.
-
     """
 
     @staticmethod
@@ -313,3 +320,54 @@ class GammaSwap(WeightedVarianceSwap):
     @staticmethod
     def gamma_pnl(*, f_0: ARRAY, f_t: ARRAY) -> ARRAY:
         return 2 * (f_t / f_0 * (np.log(f_t / f_0) - 1) + 1)
+
+
+class SkewSwap(WeightedVarianceSwap):
+    """
+    Skewness Swap or leverage swap
+    Fukasawa, M. (2014). Volatility derivatives and model-free implied leverage. International Journal of Theoretical and Applied Finance, 17(01), 1450002.
+    """
+
+    def __init__(
+        self,
+        market_model: MarketModel,
+    ) -> None:
+        self.var_swap = VarianceSwap(market_model)
+        self.gamma_swap = GammaSwap(market_model)
+        super().__init__(market_model)
+
+    def _calculate_difference(self, method_name: str, **kwargs: Any) -> ARRAY:
+        gamma_swap_method = getattr(self.gamma_swap, method_name)
+        var_swap_method = getattr(self.var_swap, method_name)
+        return gamma_swap_method(**kwargs) - var_swap_method(**kwargs)
+
+    def price(self, *, imp_var: ARRAY, tau: ARRAY) -> ARRAY:
+        return self._calculate_difference(method_name="price", imp_var=imp_var, tau=tau)
+
+    def var_vega(self, tau: ARRAY) -> ARRAY:
+        # Note that skew swap actually has Vega exposure unless corr = 0
+        return self._calculate_difference(method_name="var_vega", tau=tau)
+
+    def vanna_pnl(
+        self,
+        *,
+        imp_var_0: ARRAY,
+        tau_0: ARRAY,
+        imp_var_t: ARRAY,
+        tau_t: ARRAY,
+        f_0: ARRAY,
+        f_t: ARRAY,
+    ) -> ARRAY:
+        return self._calculate_difference(
+            "vanna_pnl",
+            imp_var_0=imp_var_0,
+            tau_0=tau_0,
+            imp_var_t=imp_var_t,
+            tau_t=tau_t,
+            f_0=f_0,
+            f_t=f_t,
+        )
+
+    @staticmethod
+    def gamma_pnl(*, f_0: ARRAY, f_t: ARRAY) -> ARRAY:
+        return GammaSwap.gamma_pnl(f_0=f_0, f_t=f_t) - VarianceSwap.gamma_pnl(f_0=f_0, f_t=f_t)

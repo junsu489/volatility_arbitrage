@@ -137,3 +137,15 @@ def generate_inefficient_market(
         imp_var_0, market_model.imp_model, correlated_normal, num_path, length, time_delta
     )
     return lr, real_var, imp_var
+
+
+def predict_var(var: ARRAY, time_delta: ARRAY, model_params: HestonParams):
+    """
+    :param var: instantaneous variance
+    :param time_delta: time delta in years
+    :param model_params: Heston Parameters
+    :return: expected instantaneous variance after time_delta
+    """
+    return model_params.mean_of_var + np.exp(-model_params.kappa * time_delta) * (
+        var - model_params.mean_of_var
+    )
