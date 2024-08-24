@@ -8,8 +8,8 @@ import numpy as np
 import numpy.typing as npt
 
 from volatility_arbitrage.pricing_model.interface import (
-    Correlation,
     HestonParams,
+    MarketModel,
     StrategyPnlCalculator,
 )
 
@@ -24,13 +24,29 @@ class WeightedVarianceSwap(ABC):
 
     def __init__(
         self,
-        imp_var_params: HestonParams,
-        real_var_params: HestonParams,
-        corr: Correlation,
+        market_model: MarketModel,
     ) -> None:
-        self.imp_var_params = imp_var_params
-        self.real_var_params = real_var_params
-        self.corr = corr
+        self.market_model = market_model
+
+    @staticmethod
+    def price_var_swap(var: ARRAY, tau: ARRAY, mean_of_var: float, kappa: float) -> ARRAY:
+        """
+        :param var: instantaneous variance
+        :param tau: time to expiry in years
+        :param mean_of_var: mean of instantenous variance process
+        :param kappa: mean reversion parameter
+        :return: price of standard variance swap
+        """
+        return mean_of_var * tau + (var - mean_of_var) * (1 - np.exp(-kappa * tau)) / kappa
+
+    @staticmethod
+    def var_swap_var_vega(tau: ARRAY, kappa: float):
+        """
+        :param tau: time to expiry in years
+        :param kappa: mena reversion paramter
+        :return: variance vega of varince swap
+        """
+        return (1 - np.exp(-kappa * tau)) / kappa
 
     @abstractmethod
     def price(self, *, imp_var: ARRAY, tau: ARRAY) -> ARRAY:
@@ -62,8 +78,8 @@ class WeightedVarianceSwap(ABC):
         :return: SSR with respect to implied instantaneous variance = d imp_var d log(F) / (d log(F))^2
         """
         return (
-            self.corr.rho_spot_imp
-            * self.imp_var_params.vol_of_var
+            self.market_model.rho_spot_imp_var
+            * self.market_model.imp_model.vol_of_var
             * np.sqrt(imp_var)
             / np.sqrt(real_var)
         )
@@ -224,15 +240,15 @@ class VarianceSwap(WeightedVarianceSwap):
     """
 
     def price(self, *, imp_var: ARRAY, tau: ARRAY) -> ARRAY:
-        return (
-            self.imp_var_params.mean_of_var * tau
-            + (imp_var - self.imp_var_params.mean_of_var)
-            * (1 - np.exp(-self.imp_var_params.kappa * tau))
-            / self.imp_var_params.kappa
+        return self.price_var_swap(
+            var=imp_var,
+            tau=tau,
+            mean_of_var=self.market_model.imp_model.mean_of_var,
+            kappa=self.market_model.imp_model.kappa,
         )
 
     def var_vega(self, tau: ARRAY) -> ARRAY:
-        return (1 - np.exp(-self.imp_var_params.kappa * tau)) / self.imp_var_params.kappa
+        return self.var_swap_var_vega(tau=tau, kappa=self.market_model.imp_model.kappa)
 
     def vanna_pnl(
         self,
@@ -249,3 +265,51 @@ class VarianceSwap(WeightedVarianceSwap):
     @staticmethod
     def gamma_pnl(*, f_0: ARRAY, f_t: ARRAY) -> ARRAY:
         return 2 * (f_t / f_0 - 1 - np.log(f_t / f_0))
+
+
+class GammaSwap(WeightedVarianceSwap):
+    """
+    Standard gamma swap or entropy contract.
+    Fukasawa, M. (2014). Volatility derivatives and model-free implied leverage. International Journal of Theoretical and Applied Finance, 17(01), 1450002.
+
+    """
+
+    @staticmethod
+    def _get_adjusted_kappa(model_params: HestonParams) -> float:
+        return model_params.kappa - model_params.vol_of_var * model_params.rho
+
+    @classmethod
+    def _get_adjusted_mean_of_var(cls, model_params: HestonParams) -> float:
+        kappa_adj = cls._get_adjusted_kappa(model_params)
+        return model_params.kappa / kappa_adj * model_params.mean_of_var
+
+    def price(self, *, imp_var: ARRAY, tau: ARRAY) -> ARRAY:
+        kappa_adj = self._get_adjusted_kappa(self.market_model.imp_model)
+        mean_of_var_adj = self._get_adjusted_mean_of_var(self.market_model.imp_model)
+        return self.price_var_swap(
+            var=imp_var, tau=tau, mean_of_var=mean_of_var_adj, kappa=kappa_adj
+        )
+
+    def var_vega(self, tau: ARRAY) -> ARRAY:
+        kappa_adj = self._get_adjusted_kappa(self.market_model.imp_model)
+        return self.var_swap_var_vega(tau=tau, kappa=kappa_adj)
+
+    def vanna_pnl(
+        self,
+        *,
+        imp_var_0: ARRAY,
+        tau_0: ARRAY,
+        imp_var_t: ARRAY,
+        tau_t: ARRAY,
+        f_0: ARRAY,
+        f_t: ARRAY,
+    ) -> ARRAY:
+        return (
+            (f_t - f_0)
+            / f_0
+            * (self.price(imp_var=imp_var_t, tau=tau_t) - self.price(imp_var=imp_var_0, tau=tau_0))
+        )
+
+    @staticmethod
+    def gamma_pnl(*, f_0: ARRAY, f_t: ARRAY) -> ARRAY:
+        return 2 * (f_t / f_0 * (np.log(f_t / f_0) - 1) + 1)
