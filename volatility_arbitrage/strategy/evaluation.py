@@ -16,7 +16,9 @@ def plot_pnl_of_path(pnl: StrategyPnl, path: int) -> None:
         ax[i // 2, i % 2].plot(value[:, path].cumsum())  # type: ignore[index]
         ax[i // 2, i % 2].hlines(0, xmin=0, xmax=length, color="black")
     ax[3, 0].set_title("gamma + vanna + theta pnl")
-    ax[3, 0].plot((pnl["gamma_pnl"][:, path] + pnl["theta_pnl"][:, path]).cumsum())
+    ax[3, 0].plot(
+        (pnl["gamma_pnl"][:, path] + pnl["vanna_pnl"][:, path] + pnl["theta_pnl"][:, path]).cumsum()
+    )
     ax[3, 0].hlines(0, xmin=0, xmax=length, color="black")
     ax[3, 1].set_title("var_vega_pnl + vega_hedge_pnl")
     ax[3, 1].plot((pnl["var_vega_pnl"][:, path] + pnl["vega_hedge_pnl"][:, path]).cumsum())
@@ -73,11 +75,11 @@ def plot_pnl_distribution(pnl: StrategyPnl) -> None:
             f"{key}: mean = {final_pnl.mean():.2f}, std = {final_pnl.std():.2f}"
         )
         ax[i // 2, i % 2].hist(final_pnl, density=True, bins=bins)
-    gamma_theta_pnl = (pnl["gamma_pnl"] + pnl["theta_pnl"]).sum(axis=0)
+    gamma_vanna_theta_pnl = (pnl["gamma_pnl"] + pnl["vanna_pnl"] + pnl["theta_pnl"]).sum(axis=0)
     ax[3, 0].set_title(
-        f"gamma + vanna + theta pnl: mean = {gamma_theta_pnl.mean():.2f}, std = {gamma_theta_pnl.std():.2f}"
+        f"gamma + vanna + theta pnl: mean = {gamma_vanna_theta_pnl.mean():.2f}, std = {gamma_vanna_theta_pnl.std():.2f}"
     )
-    ax[3, 0].hist(gamma_theta_pnl, density=True, bins=bins)
+    ax[3, 0].hist(gamma_vanna_theta_pnl, density=True, bins=bins)
 
     hedged_pnl = (pnl["var_vega_pnl"] + pnl["vega_hedge_pnl"]).sum(axis=0)
     ax[3, 1].set_title(

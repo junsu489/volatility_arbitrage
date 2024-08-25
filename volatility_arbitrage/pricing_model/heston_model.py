@@ -40,7 +40,7 @@ def generate_cir_processs(
     :param num_path: number of paths
     :param length: length of a path
     :param time_delta: time delta in years
-    :return: Simulate CIR process
+    :return: simulated CIR process
     """
     # initial_var = generate_initial_var(model_params=model_params, size=1)
 
@@ -96,6 +96,11 @@ def generate_heston_processes(
         0.5 * model_params.rho * model_params.vol_of_var * (normal_var_2**2 - 1) * time_delta
     )
     lr[1:] = drift + corr_diffusion + uncorr_diffusion + milstein_correction
+
+    # First moment. Future price process should be martingale
+    f = np.exp(lr.cumsum(axis=0))
+    log_expectation = np.log(np.mean(f, axis=1))
+    lr[1:] -= np.diff(log_expectation)[:, np.newaxis]
     return lr, var
 
 
@@ -127,7 +132,19 @@ def generate_inefficient_market(
         length=length,
         time_delta=time_delta,
     )
-    cholesky = market_model.cholesky()
+    corr_matrix = np.array(
+        [
+            [1.0, market_model.real_model.rho, market_model.rho_real_var_imp_var],
+            [market_model.real_model.rho, 1.0, market_model.rho_spot_imp_var],
+            [market_model.rho_real_var_imp_var, market_model.rho_spot_imp_var, 1.0],
+        ]
+    )
+
+    try:
+        cholesky = np.linalg.cholesky(corr_matrix)
+    except np.linalg.LinAlgError as exc:
+        raise ValueError("The correlation matrix is not positive definite.") from exc
+
     correlated_normal = (
         cholesky[2][0] * normal_var[0]
         + cholesky[2][1] * normal_var[1]
@@ -137,3 +154,15 @@ def generate_inefficient_market(
         imp_var_0, market_model.imp_model, correlated_normal, num_path, length, time_delta
     )
     return lr, real_var, imp_var
+
+
+def predict_var(var: ARRAY, time_delta: ARRAY, model_params: HestonParams):
+    """
+    :param var: instantaneous variance
+    :param time_delta: time delta in years
+    :param model_params: Heston Parameters
+    :return: expected instantaneous variance after time_delta
+    """
+    return model_params.mean_of_var + np.exp(-model_params.kappa * time_delta) * (
+        var - model_params.mean_of_var
+    )
