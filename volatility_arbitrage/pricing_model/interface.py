@@ -37,24 +37,8 @@ class MarketModel:
     rho_real_var_imp_var: float
 
     def __post_init__(self) -> None:
-        assert abs(self.rho_spot_imp_var) < 1
-        assert abs(self.rho_real_var_imp_var) < 1
-
-    def cholesky(self) -> ARRAY:
-        """Cholesky decomposition"""
-        # Construct the correlation matrix
-        corr_matrix = np.array(
-            [
-                [1.0, self.real_model.rho, self.rho_real_var_imp_var],
-                [self.real_model.rho, 1.0, self.rho_spot_imp_var],
-                [self.rho_real_var_imp_var, self.rho_spot_imp_var, 1.0],
-            ]
-        )
-
-        try:
-            return np.linalg.cholesky(corr_matrix)
-        except np.linalg.LinAlgError as exc:
-            raise ValueError("The correlation matrix is not positive definite.") from exc
+        assert abs(self.rho_spot_imp_var) <= 1
+        assert abs(self.rho_real_var_imp_var) <= 1
 
 
 class StrategyPnl(TypedDict):
