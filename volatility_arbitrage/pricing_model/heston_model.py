@@ -2,7 +2,7 @@
 
 # pylint: disable=line-too-long,too-many-arguments,too-many-locals,too-many-positional-arguments
 
-from typing import Tuple, Union
+from typing import Tuple
 
 import numpy as np
 import numpy.typing as npt
@@ -12,7 +12,7 @@ from volatility_arbitrage.pricing_model.interface import HestonParams, MarketMod
 ARRAY = npt.NDArray[np.float64]
 
 
-def generate_initial_var(model_params: HestonParams, size: Union[int, Tuple[int, ...]]) -> ARRAY:
+def generate_initial_var(model_params: HestonParams, size: int | Tuple[int, ...]) -> ARRAY:
     """
     :param model_params: Heston parameters
     :param size: size
