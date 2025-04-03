@@ -4,7 +4,7 @@ on: [push, pull_request]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # Keep Linux for better SciPy compatibility
     strategy:
       matrix:
         python-version: ["3.13"]
@@ -16,10 +16,16 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
     
+    - name: Install OpenBLAS (Linux)  # Simple apt-get for Linux
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libopenblas-dev gfortran
+    
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt  # Install all dependencies
+        pip install --only-binary=:all: numpy  # Prefer wheel for NumPy
+        pip install -r requirements.txt
     
     - name: Run isort
       run: |
